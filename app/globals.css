@@ -1,26 +1,114 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Base */
+  --background: #101419;
+  --surface: #182027;
+  --surface-light: #222c34;
+  --surface-dark: #12191f;
+  --border: #303b43;
+
+  /* Texte */
+  --text: #f4f2ef;
+  --text-muted: #87939d;
+  --text-subtle: #5f6971;
+
+  /* Accent froid */
+  --accent: #4f9693;
+  --accent-light: #79bbb7;
+  --accent-dark: #326866;
+
+  /* Accent chaud */
+  --peach: #f0ad97;
+  --peach-light: #ffc5b1;
+  --peach-dark: #a86855;
+
+  /* Danger */
+  --danger: #ef6262;
 }
 
 @theme inline {
   --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+
+  --color-surface: var(--surface);
+  --color-surface-light: var(--surface-light);
+  --color-surface-dark: var(--surface-dark);
+
+  --color-border: var(--border);
+
+  --color-app-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-subtle: var(--text-subtle);
+
+  --color-accent: var(--accent);
+  --color-accent-light: var(--accent-light);
+  --color-accent-dark: var(--accent-dark);
+
+  --color-peach: var(--peach);
+  --color-peach-light: var(--peach-light);
+  --color-peach-dark: var(--peach-dark);
+
+  --color-danger: var(--danger);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  margin: 0;
+
+  background:
+    radial-gradient(
+      circle at 85% 5%,
+      color-mix(in srgb, var(--accent) 5%, transparent),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 5% 90%,
+      color-mix(in srgb, var(--peach) 3%, transparent),
+      transparent 24%
+    ),
+    var(--background);
+
+  color: var(--text);
+
   font-family: Arial, Helvetica, sans-serif;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--surface-light);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border);
 }
