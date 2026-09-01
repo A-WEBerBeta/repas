@@ -1,6 +1,7 @@
 "use client";
 
 import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export default function LoginPage() {
@@ -8,6 +9,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const router = useRouter();
 
   async function handleLogin(event) {
     event.preventDefault();
@@ -26,8 +29,8 @@ export default function LoginPage() {
       return;
     }
 
-    setMessage("Connexion réussie ✅");
-    setLoading(false);
+    router.replace("/planning");
+    router.refresh();
   }
 
   return (

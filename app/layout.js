@@ -1,3 +1,4 @@
+import AuthGuard from "@/components/AuthGuard";
 import { ToastProvider } from "@/components/ToastProvider";
 import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
@@ -21,7 +22,9 @@ export default function RootLayout({ children }) {
   return (
     <html lang="fr">
       <body className={`${inter.variable} ${playfair.variable}`}>
-        <ToastProvider>{children}</ToastProvider>
+        <ToastProvider>
+          <AuthGuard>{children}</AuthGuard>
+        </ToastProvider>
       </body>
     </html>
   );

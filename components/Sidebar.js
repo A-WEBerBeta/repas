@@ -1,13 +1,19 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import {
   BookOpen,
   CalendarDays,
   Carrot,
+  LogOut,
   Plus,
   ShoppingBasket,
 } from "lucide-react";
+
+import { signOut } from "@/lib/userState";
 
 const items = [
   {
@@ -37,6 +43,19 @@ const items = [
 ];
 
 export default function Sidebar({ active = "planning" }) {
+  const router = useRouter();
+
+  async function handleSignOut() {
+    try {
+      await signOut();
+
+      router.replace("/login");
+      router.refresh();
+    } catch (error) {
+      console.error("Erreur déconnexion :", error);
+    }
+  }
+
   return (
     <aside className="hidden min-h-screen w-55 shrink-0 border-r border-white/5 bg-background px-5 py-7 lg:flex lg:flex-col xl:w-60 2xl:w-65">
       {/* LOGO */}
@@ -64,7 +83,6 @@ export default function Sidebar({ active = "planning" }) {
       <nav className="mt-14 space-y-2">
         {items.map((item) => {
           const Icon = item.icon;
-
           const isActive = active === item.name;
 
           return (
@@ -124,6 +142,24 @@ export default function Sidebar({ active = "planning" }) {
             <p className="mt-0.5 text-[10px] text-subtle">Ajouter au carnet</p>
           </div>
         </Link>
+
+        {/* LOGOUT */}
+
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="group mt-3 flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-muted transition-colors hover:bg-white/3 hover:text-app-text"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/5 bg-white/2 text-subtle transition-colors group-hover:border-red-400/15 group-hover:bg-red-500/7 group-hover:text-red-300">
+            <LogOut size={17} strokeWidth={1.8} />
+          </span>
+
+          <div className="min-w-0">
+            <p className="text-sm font-medium">Déconnexion</p>
+
+            <p className="mt-0.5 text-[10px] text-subtle">Fermer la session</p>
+          </div>
+        </button>
 
         <div className="my-5 h-px bg-white/5" />
 
