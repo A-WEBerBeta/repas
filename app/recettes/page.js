@@ -5,6 +5,8 @@ import MobileNav from "@/components/MobileNav";
 import Sidebar from "@/components/Sidebar";
 import { useToast } from "@/components/ToastProvider";
 
+import { loadUserState, saveUserState } from "@/lib/userState";
+
 import {
   ArrowRight,
   BookOpen,
@@ -26,17 +28,34 @@ export default function RecipesPage() {
   const [search, setSearch] = useState("");
   const [recipeToDelete, setRecipeToDelete] = useState(null);
 
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const { showToast } = useToast();
 
   const menuRef = useRef(null);
 
   useEffect(() => {
-    const storedRecipes = localStorage.getItem("recipes");
+    async function loadRecipes() {
+      try {
+        const data = await loadUserState();
 
-    if (storedRecipes) {
-      setRecipes(JSON.parse(storedRecipes));
+        setRecipes(data.recipes);
+
+        /*
+         * Copie locale temporaire.
+         * On la garde tant que toute l'app
+         * n'est pas encore migrée.
+         */
+        localStorage.setItem("recipes", JSON.stringify(data.recipes));
+      } catch (error) {
+        console.error("Erreur chargement recettes :", error);
+
+        showToast("Impossible de charger les recettes", "info");
+      }
     }
-  }, []);
+
+    loadRecipes();
+  }, [showToast]);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -52,24 +71,51 @@ export default function RecipesPage() {
     };
   }, []);
 
-  function deleteRecipe() {
-    if (!recipeToDelete) return;
+  async function deleteRecipe() {
+    if (!recipeToDelete || isDeleting) {
+      return;
+    }
 
-    const storedRecipes = localStorage.getItem("recipes");
-
-    const currentRecipes = storedRecipes ? JSON.parse(storedRecipes) : [];
-
-    const updatedRecipes = currentRecipes.filter(
+    const updatedRecipes = recipes.filter(
       (recipe) => recipe.id !== recipeToDelete.id,
     );
 
+    setIsDeleting(true);
+
+    /*
+     * Mise à jour immédiate dans l'interface.
+     */
+    setRecipes(updatedRecipes);
+
+    /*
+     * Copie locale temporaire.
+     */
     localStorage.setItem("recipes", JSON.stringify(updatedRecipes));
 
-    setRecipes(updatedRecipes);
-    setRecipeToDelete(null);
-    setOpenMenuId(null);
+    try {
+      await saveUserState({
+        recipes: updatedRecipes,
+      });
 
-    showToast("Recette supprimée");
+      setRecipeToDelete(null);
+      setOpenMenuId(null);
+
+      showToast("Recette supprimée");
+    } catch (error) {
+      console.error("Erreur suppression recette :", error);
+
+      /*
+       * Si Supabase échoue, on remet la liste
+       * telle qu'elle était avant.
+       */
+      setRecipes(recipes);
+
+      localStorage.setItem("recipes", JSON.stringify(recipes));
+
+      showToast("La recette n’a pas pu être supprimée", "info");
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   const filteredRecipes = recipes.filter((recipe) =>
@@ -407,11 +453,12 @@ export default function RecipesPage() {
                             type="button"
                             onClick={() => {
                               setRecipeToDelete(recipe);
+
                               setOpenMenuId(null);
                             }}
                             className="group/menu mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-muted transition hover:bg-red-500/8 hover:text-red-300"
                           >
-                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/4text-subtle transition group-hover/menu:bg-red-500/10 group-hover/menu:text-red-400">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/4 text-subtle transition group-hover/menu:bg-red-500/10 group-hover/menu:text-red-400">
                               <Trash2 size={15} />
                             </div>
 
@@ -444,7 +491,11 @@ export default function RecipesPage() {
             ? `"${recipeToDelete.name}" sera supprimée définitivement. Cette action ne pourra pas être annulée.`
             : ""
         }
-        onCancel={() => setRecipeToDelete(null)}
+        onCancel={() => {
+          if (!isDeleting) {
+            setRecipeToDelete(null);
+          }
+        }}
         onConfirm={deleteRecipe}
       />
     </main>

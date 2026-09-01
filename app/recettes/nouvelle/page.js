@@ -7,6 +7,9 @@ import { useToast } from "@/components/ToastProvider";
 
 import { defaultIngredients } from "@/data/defaultIngredients";
 import { units } from "@/data/units";
+
+import { loadUserState, saveUserState } from "@/lib/userState";
+
 import { pluralizeUnit } from "@/utils/formatUnit";
 import { validateRecipe } from "@/utils/validateRecipe";
 
@@ -14,6 +17,7 @@ import { ArrowLeft, ChevronDown, Plus, Save, Utensils, X } from "lucide-react";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+
 import { useEffect, useState } from "react";
 
 const emptyErrors = {
@@ -42,17 +46,31 @@ export default function NewRecipePage() {
 
   const [errors, setErrors] = useState(emptyErrors);
 
+  const [isSaving, setIsSaving] = useState(false);
+
   useEffect(() => {
-    const storedIngredients = localStorage.getItem("ingredients");
+    async function loadIngredients() {
+      try {
+        const data = await loadUserState();
 
-    if (storedIngredients) {
-      setAvailableIngredients(JSON.parse(storedIngredients));
-    } else {
-      setAvailableIngredients(defaultIngredients);
+        const loadedIngredients =
+          data.ingredients?.length > 0 ? data.ingredients : defaultIngredients;
 
-      localStorage.setItem("ingredients", JSON.stringify(defaultIngredients));
+        setAvailableIngredients(loadedIngredients);
+
+        /*
+         * Copie locale temporaire.
+         */
+        localStorage.setItem("ingredients", JSON.stringify(loadedIngredients));
+      } catch (error) {
+        console.error("Erreur chargement ingrédients :", error);
+
+        showToast("Impossible de charger les ingrédients", "info");
+      }
     }
-  }, []);
+
+    loadIngredients();
+  }, [showToast]);
 
   function clearGeneralIngredientError() {
     setErrors((current) => ({
@@ -145,8 +163,10 @@ export default function NewRecipePage() {
     clearRowError(id, "quantity");
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
+
+    if (isSaving) return;
 
     const validation = validateRecipe({
       name,
@@ -172,26 +192,43 @@ export default function NewRecipePage() {
 
       ingredients: ingredients.map((ingredient) => ({
         ingredientId: ingredient.ingredientId,
+
         quantity: Number(ingredient.quantity),
+
         unit: ingredient.unit,
       })),
 
       instructions: instructions.trim(),
+
       createdAt: new Date().toISOString(),
     };
 
-    const storedRecipes = localStorage.getItem("recipes");
+    setIsSaving(true);
 
-    const currentRecipes = storedRecipes ? JSON.parse(storedRecipes) : [];
+    try {
+      const data = await loadUserState();
 
-    localStorage.setItem(
-      "recipes",
-      JSON.stringify([...currentRecipes, newRecipe]),
-    );
+      const updatedRecipes = [...(data.recipes || []), newRecipe];
 
-    showToast("Recette créée");
+      await saveUserState({
+        recipes: updatedRecipes,
+      });
 
-    router.push("/recettes");
+      /*
+       * Copie locale temporaire.
+       */
+      localStorage.setItem("recipes", JSON.stringify(updatedRecipes));
+
+      showToast("Recette créée");
+
+      router.push("/recettes");
+    } catch (error) {
+      console.error("Erreur création recette :", error);
+
+      showToast("La recette n’a pas pu être enregistrée", "info");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   return (
@@ -394,7 +431,7 @@ export default function NewRecipePage() {
                         : "border-white/10 bg-white/1 hover:border-peach/25 hover:bg-peach/2.5"
                     }`}
                   >
-                    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-peach/8 text-peach cursor-pointer">
+                    <div className="mx-auto flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl bg-peach/8 text-peach">
                       <Plus size={18} />
                     </div>
 
@@ -708,10 +745,12 @@ export default function NewRecipePage() {
 
                 <button
                   type="submit"
-                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-peach/25 bg-peach/10 px-4 py-3 text-sm font-medium text-peach-light transition-colors hover:border-peach/40 hover:bg-peach/15"
+                  disabled={isSaving}
+                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-peach/25 bg-peach/10 px-4 py-3 text-sm font-medium text-peach-light transition-colors hover:border-peach/40 hover:bg-peach/15 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Save size={16} />
-                  Enregistrer
+
+                  {isSaving ? "Enregistrement..." : "Enregistrer"}
                 </button>
               </section>
             </aside>

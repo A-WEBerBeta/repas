@@ -5,6 +5,7 @@ import MobileNav from "@/components/MobileNav";
 import ShoppingDayTag from "@/components/ShoppingDayTag";
 import Sidebar from "@/components/Sidebar";
 import { useToast } from "@/components/ToastProvider";
+import { loadUserState, saveUserState } from "@/lib/userState";
 
 import {
   ArrowRight,
@@ -205,23 +206,52 @@ export default function PlanningPage() {
   const progressAngle = (progressPercent / 100) * 360;
 
   useEffect(() => {
-    const storedRecipes = localStorage.getItem("recipes");
+    async function loadData() {
+      try {
+        const data = await loadUserState();
 
-    const storedPlanning = localStorage.getItem("planning");
+        setRecipes(data.recipes);
+        setPlanning(data.planning);
+        setShoppingDays(data.shoppingDays);
 
-    const storedShoppingDays = localStorage.getItem("shoppingDays");
+        /*
+         * Pendant la transition, on garde aussi
+         * le localStorage à jour pour les pages
+         * qui ne sont pas encore passées sur Supabase.
+         */
+        localStorage.setItem("recipes", JSON.stringify(data.recipes));
 
-    setRecipes(storedRecipes ? JSON.parse(storedRecipes) : []);
+        localStorage.setItem("planning", JSON.stringify(data.planning));
 
-    setPlanning(storedPlanning ? JSON.parse(storedPlanning) : {});
+        localStorage.setItem("shoppingDays", JSON.stringify(data.shoppingDays));
+      } catch (error) {
+        console.error("Erreur chargement Supabase :", error);
 
-    setShoppingDays(storedShoppingDays ? JSON.parse(storedShoppingDays) : {});
-  }, []);
+        showToast("Impossible de charger les données", "info");
+      }
+    }
 
-  function savePlanning(updatedPlanning) {
+    loadData();
+  }, [showToast]);
+
+  async function savePlanning(updatedPlanning) {
     setPlanning(updatedPlanning);
 
+    /*
+     * On garde encore localStorage pendant
+     * qu'on migre les autres pages.
+     */
     localStorage.setItem("planning", JSON.stringify(updatedPlanning));
+
+    try {
+      await saveUserState({
+        planning: updatedPlanning,
+      });
+    } catch (error) {
+      console.error("Erreur sauvegarde planning :", error);
+
+      showToast("Le planning n’a pas pu être synchronisé", "info");
+    }
   }
 
   function openSlot(dayKey, mealKey) {
@@ -378,6 +408,14 @@ export default function PlanningPage() {
     setShoppingDays(updatedShoppingDays);
 
     localStorage.setItem("shoppingDays", JSON.stringify(updatedShoppingDays));
+
+    saveUserState({
+      shoppingDays: updatedShoppingDays,
+    }).catch((error) => {
+      console.error("Erreur sauvegarde jour de courses :", error);
+
+      showToast("Le jour de courses n’a pas pu être synchronisé", "info");
+    });
   }
 
   function previousWeek() {

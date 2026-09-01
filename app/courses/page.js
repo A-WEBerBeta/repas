@@ -5,6 +5,9 @@ import Sidebar from "@/components/Sidebar";
 import { useToast } from "@/components/ToastProvider";
 
 import { defaultIngredients } from "@/data/defaultIngredients";
+
+import { loadUserState, saveUserState } from "@/lib/userState";
+
 import { formatQuantityUnit } from "@/utils/formatUnit";
 
 import {
@@ -90,9 +93,7 @@ export default function CoursesPage() {
   const { showToast } = useToast();
 
   const [recipes, setRecipes] = useState([]);
-
   const [ingredients, setIngredients] = useState([]);
-
   const [planning, setPlanning] = useState({});
 
   const [shoppingLists, setShoppingLists] = useState({});
@@ -143,11 +144,6 @@ export default function CoursesPage() {
 
         const baseServings = Math.max(1, Number(recipe.baseServings) || 1);
 
-        /*
-         * Les anciens slots qui n'avaient pas
-         * encore servings sont considérés comme
-         * une portion.
-         */
         const plannedServings = Math.max(1, Number(slot.servings) || 1);
 
         recipe.ingredients.forEach((recipeIngredient) => {
@@ -170,14 +166,6 @@ export default function CoursesPage() {
             return;
           }
 
-          /*
-           * Exemple :
-           *
-           * recette = 300 g pour 2
-           * planning = 1 portion
-           *
-           * 300 × 1 / 2 = 150 g
-           */
           const quantity = (baseQuantity * plannedServings) / baseServings;
 
           const unit = recipeIngredient.unit || ingredient.unit || "";
@@ -236,29 +224,65 @@ export default function CoursesPage() {
   const isCurrentWeek = isSameDay(currentMonday, getMonday(new Date()));
 
   useEffect(() => {
-    const storedRecipes = localStorage.getItem("recipes");
+    async function loadData() {
+      try {
+        const data = await loadUserState();
 
-    const storedIngredients = localStorage.getItem("ingredients");
+        setRecipes(data.recipes);
 
-    const storedPlanning = localStorage.getItem("planning");
+        setIngredients(
+          data.ingredients?.length > 0 ? data.ingredients : defaultIngredients,
+        );
 
-    const storedShopping = localStorage.getItem("shoppingLists");
+        setPlanning(data.planning);
 
-    setRecipes(storedRecipes ? JSON.parse(storedRecipes) : []);
+        setShoppingLists(data.shoppingLists);
 
-    setIngredients(
-      storedIngredients ? JSON.parse(storedIngredients) : defaultIngredients,
-    );
+        /*
+         * Copie temporaire locale pendant
+         * la migration du reste de l'app.
+         */
+        localStorage.setItem("recipes", JSON.stringify(data.recipes));
 
-    setPlanning(storedPlanning ? JSON.parse(storedPlanning) : {});
+        localStorage.setItem(
+          "ingredients",
+          JSON.stringify(
+            data.ingredients?.length > 0
+              ? data.ingredients
+              : defaultIngredients,
+          ),
+        );
 
-    setShoppingLists(storedShopping ? JSON.parse(storedShopping) : {});
-  }, []);
+        localStorage.setItem("planning", JSON.stringify(data.planning));
 
-  function saveShoppingLists(updated) {
+        localStorage.setItem(
+          "shoppingLists",
+          JSON.stringify(data.shoppingLists),
+        );
+      } catch (error) {
+        console.error("Erreur chargement Courses :", error);
+
+        showToast("Impossible de charger les courses", "info");
+      }
+    }
+
+    loadData();
+  }, [showToast]);
+
+  async function saveShoppingLists(updated) {
     setShoppingLists(updated);
 
     localStorage.setItem("shoppingLists", JSON.stringify(updated));
+
+    try {
+      await saveUserState({
+        shoppingLists: updated,
+      });
+    } catch (error) {
+      console.error("Erreur sauvegarde courses :", error);
+
+      showToast("La liste n’a pas pu être synchronisée", "info");
+    }
   }
 
   function toggleItem(itemId) {

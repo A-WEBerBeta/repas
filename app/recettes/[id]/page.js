@@ -5,6 +5,8 @@ import MobileNav from "@/components/MobileNav";
 import Sidebar from "@/components/Sidebar";
 import { useToast } from "@/components/ToastProvider";
 
+import { loadUserState, saveUserState } from "@/lib/userState";
+
 import { formatQuantityUnit } from "@/utils/formatUnit";
 
 import {
@@ -20,6 +22,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { useParams, useRouter } from "next/navigation";
+
 import { useEffect, useState } from "react";
 
 export default function RecipePage() {
@@ -29,36 +32,61 @@ export default function RecipePage() {
   const { showToast } = useToast();
 
   const [recipe, setRecipe] = useState(null);
+
   const [ingredients, setIngredients] = useState([]);
 
   const [selectedServings, setSelectedServings] = useState(1);
 
   const [menuOpen, setMenuOpen] = useState(false);
+
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
+  const [isDeleting, setIsDeleting] = useState(false);
+
   useEffect(() => {
-    const storedRecipes = localStorage.getItem("recipes");
-    const storedIngredients = localStorage.getItem("ingredients");
+    async function loadRecipe() {
+      try {
+        const data = await loadUserState();
 
-    const recipes = storedRecipes ? JSON.parse(storedRecipes) : [];
+        const recipes = data.recipes || [];
 
-    const ingredientList = storedIngredients
-      ? JSON.parse(storedIngredients)
-      : [];
+        const ingredientList = data.ingredients || [];
 
-    const foundRecipe = recipes.find(
-      (item) => String(item.id) === String(params.id),
-    );
+        const foundRecipe = recipes.find(
+          (item) => String(item.id) === String(params.id),
+        );
 
-    if (!foundRecipe) {
-      router.push("/recettes");
-      return;
+        if (!foundRecipe) {
+          showToast("Recette introuvable", "info");
+
+          router.push("/recettes");
+
+          return;
+        }
+
+        setRecipe(foundRecipe);
+
+        setIngredients(ingredientList);
+
+        setSelectedServings(Number(foundRecipe.baseServings) || 1);
+
+        /*
+         * Copie locale temporaire.
+         */
+        localStorage.setItem("recipes", JSON.stringify(recipes));
+
+        localStorage.setItem("ingredients", JSON.stringify(ingredientList));
+      } catch (error) {
+        console.error("Erreur chargement recette :", error);
+
+        showToast("Impossible de charger la recette", "info");
+
+        router.push("/recettes");
+      }
     }
 
-    setRecipe(foundRecipe);
-    setIngredients(ingredientList);
-    setSelectedServings(foundRecipe.baseServings);
-  }, [params.id, router]);
+    loadRecipe();
+  }, [params.id, router, showToast]);
 
   function getIngredientName(ingredientId) {
     return (
@@ -69,31 +97,53 @@ export default function RecipePage() {
   }
 
   function getAdjustedQuantity(quantity) {
-    if (!recipe) return quantity;
+    if (!recipe) {
+      return quantity;
+    }
+
+    const baseServings = Math.max(1, Number(recipe.baseServings) || 1);
 
     const adjusted =
-      (Number(quantity) * Number(selectedServings)) /
-      Number(recipe.baseServings);
+      (Number(quantity) * Number(selectedServings)) / baseServings;
 
     return Number.isInteger(adjusted) ? adjusted : Number(adjusted.toFixed(2));
   }
 
-  function deleteRecipe() {
-    if (!recipe) return;
+  async function deleteRecipe() {
+    if (!recipe || isDeleting) {
+      return;
+    }
 
-    const storedRecipes = localStorage.getItem("recipes");
+    setIsDeleting(true);
 
-    const recipes = storedRecipes ? JSON.parse(storedRecipes) : [];
+    try {
+      const data = await loadUserState();
 
-    const updatedRecipes = recipes.filter(
-      (item) => String(item.id) !== String(recipe.id),
-    );
+      const recipes = data.recipes || [];
 
-    localStorage.setItem("recipes", JSON.stringify(updatedRecipes));
+      const updatedRecipes = recipes.filter(
+        (item) => String(item.id) !== String(recipe.id),
+      );
 
-    showToast("Recette supprimée");
+      await saveUserState({
+        recipes: updatedRecipes,
+      });
 
-    router.push("/recettes");
+      /*
+       * Copie locale temporaire.
+       */
+      localStorage.setItem("recipes", JSON.stringify(updatedRecipes));
+
+      showToast("Recette supprimée");
+
+      router.push("/recettes");
+    } catch (error) {
+      console.error("Erreur suppression recette :", error);
+
+      showToast("La recette n’a pas pu être supprimée", "info");
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   if (!recipe) {
@@ -123,7 +173,7 @@ export default function RecipePage() {
           <div className="flex items-center justify-between gap-4">
             <Link
               href="/recettes"
-              className="group inline-flex items-center gap-2 rounded-xl border border-white/8 px-4 py-3 text-sm text-muted transition-colors hover:border-white/15 hover:bg-white/3hover:text-app-text"
+              className="group inline-flex items-center gap-2 rounded-xl border border-white/8 px-4 py-3 text-sm text-muted transition-colors hover:border-white/15 hover:bg-white/3 hover:text-app-text"
             >
               <ArrowLeft
                 size={16}
@@ -262,8 +312,8 @@ export default function RecipePage() {
                   <BookOpen size={15} className="text-peach" />
 
                   <span className="text-sm text-muted">
-                    {recipe.ingredients.length}{" "}
-                    {recipe.ingredients.length > 1
+                    {recipe.ingredients?.length || 0}{" "}
+                    {(recipe.ingredients?.length || 0) > 1
                       ? "ingrédients"
                       : "ingrédient"}
                   </span>
@@ -403,12 +453,12 @@ export default function RecipePage() {
                   </div>
 
                   <span className="rounded-lg bg-accent/8 px-2.5 py-1 text-[11px] text-accent-light">
-                    {recipe.ingredients.length}
+                    {recipe.ingredients?.length || 0}
                   </span>
                 </div>
 
                 <div className="mt-5 divide-y divide-white/5">
-                  {recipe.ingredients.map((ingredient, index) => {
+                  {(recipe.ingredients || []).map((ingredient, index) => {
                     const adjustedQuantity = getAdjustedQuantity(
                       ingredient.quantity,
                     );
@@ -444,7 +494,11 @@ export default function RecipePage() {
         open={deleteModalOpen}
         title="Supprimer cette recette ?"
         description={`"${recipe.name}" sera supprimée définitivement. Cette action ne pourra pas être annulée.`}
-        onCancel={() => setDeleteModalOpen(false)}
+        onCancel={() => {
+          if (!isDeleting) {
+            setDeleteModalOpen(false);
+          }
+        }}
         onConfirm={deleteRecipe}
       />
     </main>

@@ -7,6 +7,9 @@ import { useToast } from "@/components/ToastProvider";
 
 import { defaultIngredients } from "@/data/defaultIngredients";
 import { units } from "@/data/units";
+
+import { loadUserState, saveUserState } from "@/lib/userState";
+
 import { pluralizeUnit } from "@/utils/formatUnit";
 import { validateRecipe } from "@/utils/validateRecipe";
 
@@ -47,45 +50,66 @@ export default function EditRecipePage() {
 
   const [loaded, setLoaded] = useState(false);
 
+  const [isSaving, setIsSaving] = useState(false);
+
   useEffect(() => {
-    const storedRecipes = localStorage.getItem("recipes");
-    const storedIngredients = localStorage.getItem("ingredients");
+    async function loadRecipe() {
+      try {
+        const data = await loadUserState();
 
-    const recipes = storedRecipes ? JSON.parse(storedRecipes) : [];
+        const recipes = data.recipes || [];
 
-    const ingredientList = storedIngredients
-      ? JSON.parse(storedIngredients)
-      : defaultIngredients;
+        const ingredientList =
+          data.ingredients?.length > 0 ? data.ingredients : defaultIngredients;
 
-    const foundRecipe = recipes.find(
-      (recipe) => String(recipe.id) === String(params.id),
-    );
+        const foundRecipe = recipes.find(
+          (recipe) => String(recipe.id) === String(params.id),
+        );
 
-    if (!foundRecipe) {
-      router.push("/recettes");
+        if (!foundRecipe) {
+          showToast("Recette introuvable", "info");
 
-      return;
+          router.push("/recettes");
+
+          return;
+        }
+
+        setAvailableIngredients(ingredientList);
+
+        setRecipeId(foundRecipe.id);
+        setName(foundRecipe.name);
+        setPortions(foundRecipe.baseServings);
+        setImage(foundRecipe.image || "");
+        setInstructions(foundRecipe.instructions || "");
+
+        setIngredients(
+          (foundRecipe.ingredients || []).map((ingredient) => ({
+            id: crypto.randomUUID(),
+            ingredientId: ingredient.ingredientId,
+            quantity: ingredient.quantity,
+            unit: ingredient.unit,
+          })),
+        );
+
+        /*
+         * Copie locale temporaire.
+         */
+        localStorage.setItem("recipes", JSON.stringify(recipes));
+
+        localStorage.setItem("ingredients", JSON.stringify(ingredientList));
+
+        setLoaded(true);
+      } catch (error) {
+        console.error("Erreur chargement recette :", error);
+
+        showToast("Impossible de charger la recette", "info");
+
+        router.push("/recettes");
+      }
     }
 
-    setAvailableIngredients(ingredientList);
-
-    setRecipeId(foundRecipe.id);
-    setName(foundRecipe.name);
-    setPortions(foundRecipe.baseServings);
-    setImage(foundRecipe.image || "");
-    setInstructions(foundRecipe.instructions || "");
-
-    setIngredients(
-      foundRecipe.ingredients.map((ingredient) => ({
-        id: crypto.randomUUID(),
-        ingredientId: ingredient.ingredientId,
-        quantity: ingredient.quantity,
-        unit: ingredient.unit,
-      })),
-    );
-
-    setLoaded(true);
-  }, [params.id, router]);
+    loadRecipe();
+  }, [params.id, router, showToast]);
 
   function clearGeneralIngredientError() {
     setErrors((current) => ({
@@ -178,8 +202,10 @@ export default function EditRecipePage() {
     clearRowError(id, "quantity");
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
+
+    if (isSaving) return;
 
     const validation = validateRecipe({
       name,
@@ -197,39 +223,70 @@ export default function EditRecipePage() {
 
     setErrors(emptyErrors);
 
-    const updatedRecipe = {
-      id: recipeId,
-      name: name.trim(),
-      baseServings: Number(portions),
-      image,
+    setIsSaving(true);
 
-      ingredients: ingredients.map((ingredient) => ({
-        ingredientId: ingredient.ingredientId,
-        quantity: Number(ingredient.quantity),
-        unit: ingredient.unit,
-      })),
+    try {
+      const data = await loadUserState();
 
-      instructions: instructions.trim(),
-    };
+      const recipes = data.recipes || [];
 
-    const storedRecipes = localStorage.getItem("recipes");
+      const existingRecipe = recipes.find(
+        (recipe) => String(recipe.id) === String(recipeId),
+      );
 
-    const recipes = storedRecipes ? JSON.parse(storedRecipes) : [];
+      if (!existingRecipe) {
+        showToast("Recette introuvable", "info");
 
-    const updatedRecipes = recipes.map((recipe) =>
-      String(recipe.id) === String(recipeId)
-        ? {
-            ...recipe,
-            ...updatedRecipe,
-          }
-        : recipe,
-    );
+        router.push("/recettes");
 
-    localStorage.setItem("recipes", JSON.stringify(updatedRecipes));
+        return;
+      }
 
-    showToast("Modifications enregistrées");
+      const updatedRecipe = {
+        ...existingRecipe,
 
-    router.push(`/recettes/${recipeId}`);
+        id: recipeId,
+
+        name: name.trim(),
+
+        baseServings: Number(portions),
+
+        image,
+
+        ingredients: ingredients.map((ingredient) => ({
+          ingredientId: ingredient.ingredientId,
+
+          quantity: Number(ingredient.quantity),
+
+          unit: ingredient.unit,
+        })),
+
+        instructions: instructions.trim(),
+      };
+
+      const updatedRecipes = recipes.map((recipe) =>
+        String(recipe.id) === String(recipeId) ? updatedRecipe : recipe,
+      );
+
+      await saveUserState({
+        recipes: updatedRecipes,
+      });
+
+      /*
+       * Copie locale temporaire.
+       */
+      localStorage.setItem("recipes", JSON.stringify(updatedRecipes));
+
+      showToast("Modifications enregistrées");
+
+      router.push(`/recettes/${recipeId}`);
+    } catch (error) {
+      console.error("Erreur modification recette :", error);
+
+      showToast("Les modifications n’ont pas pu être enregistrées", "info");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   if (!loaded) {
@@ -512,7 +569,9 @@ export default function EditRecipePage() {
                           <div>
                             <input
                               type="number"
-                              step="any"
+                              step="0.25"
+                              min="0"
+                              inputMode="decimal"
                               placeholder="Qté"
                               value={ingredient.quantity}
                               onChange={(event) =>
@@ -756,10 +815,12 @@ export default function EditRecipePage() {
 
                 <button
                   type="submit"
-                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-peach/25 bg-peach/10 px-4 py-3 text-sm font-medium text-peach-light transition-colors hover:border-peach/40 hover:bg-peach/15"
+                  disabled={isSaving}
+                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-peach/25 bg-peach/10 px-4 py-3 text-sm font-medium text-peach-light transition-colors hover:border-peach/40 hover:bg-peach/15 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Save size={16} />
-                  Enregistrer
+
+                  {isSaving ? "Enregistrement..." : "Enregistrer"}
                 </button>
 
                 <Link

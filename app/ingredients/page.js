@@ -3,15 +3,20 @@
 import AddIngredientModal from "@/components/AddIngredientModal";
 import MobileNav from "@/components/MobileNav";
 import Sidebar from "@/components/Sidebar";
+import { useToast } from "@/components/ToastProvider";
 
 import { defaultIngredients } from "@/data/defaultIngredients";
 import { units } from "@/data/units";
+
+import { loadUserState, saveUserState } from "@/lib/userState";
 
 import { ChevronDown, Plus, Search, Trash2, Wheat } from "lucide-react";
 
 import { useEffect, useMemo, useState } from "react";
 
 export default function IngredientsPage() {
+  const { showToast } = useToast();
+
   const [ingredients, setIngredients] = useState([]);
 
   const [name, setName] = useState("");
@@ -22,55 +27,113 @@ export default function IngredientsPage() {
 
   const [addModalOpen, setAddModalOpen] = useState(false);
 
+  const [isSaving, setIsSaving] = useState(false);
+
   useEffect(() => {
-    const storedIngredients = localStorage.getItem("ingredients");
+    async function loadIngredients() {
+      try {
+        const data = await loadUserState();
 
-    const currentIngredients = storedIngredients
-      ? JSON.parse(storedIngredients)
-      : [];
+        const currentIngredients = data.ingredients || [];
 
-    const customIngredients = currentIngredients.filter(
-      (ingredient) => ingredient.custom,
-    );
+        const customIngredients = currentIngredients.filter(
+          (ingredient) => ingredient.custom,
+        );
 
-    const mergedIngredients = [
-      ...defaultIngredients,
+        const mergedIngredients = [
+          ...defaultIngredients,
 
-      ...customIngredients.filter(
-        (customIngredient) =>
-          !defaultIngredients.some(
-            (defaultIngredient) =>
-              defaultIngredient.name.toLowerCase() ===
-              customIngredient.name.toLowerCase(),
+          ...customIngredients.filter(
+            (customIngredient) =>
+              !defaultIngredients.some(
+                (defaultIngredient) =>
+                  defaultIngredient.name.toLowerCase() ===
+                  customIngredient.name.toLowerCase(),
+              ),
           ),
-      ),
-    ];
+        ];
 
-    setIngredients(mergedIngredients);
+        setIngredients(mergedIngredients);
 
-    localStorage.setItem("ingredients", JSON.stringify(mergedIngredients));
-  }, []);
+        /*
+         * Si Supabase avait une ancienne liste
+         * incomplète, on resynchronise la base
+         * avec les ingrédients par défaut actuels
+         * + les ingrédients personnels.
+         */
+        const needsSync =
+          JSON.stringify(currentIngredients) !==
+          JSON.stringify(mergedIngredients);
 
-  function saveIngredients(updatedIngredients) {
+        if (needsSync) {
+          await saveUserState({
+            ingredients: mergedIngredients,
+          });
+        }
+
+        /*
+         * Copie locale temporaire.
+         */
+        localStorage.setItem("ingredients", JSON.stringify(mergedIngredients));
+      } catch (error) {
+        console.error("Erreur chargement ingrédients :", error);
+
+        showToast("Impossible de charger les ingrédients", "info");
+      }
+    }
+
+    loadIngredients();
+  }, [showToast]);
+
+  async function saveIngredients(updatedIngredients) {
     setIngredients(updatedIngredients);
 
+    /*
+     * Copie locale temporaire.
+     */
     localStorage.setItem("ingredients", JSON.stringify(updatedIngredients));
+
+    try {
+      await saveUserState({
+        ingredients: updatedIngredients,
+      });
+
+      return true;
+    } catch (error) {
+      console.error("Erreur sauvegarde ingrédients :", error);
+
+      showToast("Les ingrédients n’ont pas pu être synchronisés", "info");
+
+      return false;
+    }
   }
 
-  function addIngredient(event) {
+  async function addIngredient(event) {
     if (event) {
       event.preventDefault();
     }
 
+    if (isSaving) {
+      return false;
+    }
+
     const cleanName = name.trim();
 
-    if (!cleanName) return false;
+    if (!cleanName) {
+      showToast("Écris le nom de l’ingrédient", "info");
+
+      return false;
+    }
 
     const alreadyExists = ingredients.some(
       (ingredient) => ingredient.name.toLowerCase() === cleanName.toLowerCase(),
     );
 
-    if (alreadyExists) return false;
+    if (alreadyExists) {
+      showToast("Cet ingrédient existe déjà", "info");
+
+      return false;
+    }
 
     const newIngredient = {
       id: crypto.randomUUID(),
@@ -79,24 +142,56 @@ export default function IngredientsPage() {
       custom: true,
     };
 
-    saveIngredients([...ingredients, newIngredient]);
+    const updatedIngredients = [...ingredients, newIngredient];
+
+    setIsSaving(true);
+
+    const success = await saveIngredients(updatedIngredients);
+
+    setIsSaving(false);
+
+    if (!success) {
+      return false;
+    }
 
     setName("");
     setUnit("g");
 
+    showToast("Ingrédient ajouté");
+
     return true;
   }
 
-  function removeIngredient(id) {
-    const confirmed = window.confirm("Supprimer cet ingrédient ?");
+  async function removeIngredient(id) {
+    const ingredientToRemove = ingredients.find(
+      (ingredient) => ingredient.id === id,
+    );
 
-    if (!confirmed) return;
+    if (!ingredientToRemove || !ingredientToRemove.custom) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Supprimer "${ingredientToRemove.name}" ?`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
 
     const updatedIngredients = ingredients.filter(
       (ingredient) => ingredient.id !== id,
     );
 
-    saveIngredients(updatedIngredients);
+    setIsSaving(true);
+
+    const success = await saveIngredients(updatedIngredients);
+
+    setIsSaving(false);
+
+    if (success) {
+      showToast("Ingrédient supprimé");
+    }
   }
 
   const filteredIngredients = useMemo(() => {
@@ -298,7 +393,8 @@ export default function IngredientsPage() {
                             <button
                               type="button"
                               onClick={() => removeIngredient(ingredient.id)}
-                              className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle opacity-60 transition-colors hover:bg-red-500/10 hover:text-red-400 hover:opacity-100"
+                              disabled={isSaving}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle opacity-60 transition-colors hover:bg-red-500/10 hover:text-red-400 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
                               aria-label={`Supprimer ${ingredient.name}`}
                             >
                               <Trash2 size={14} />
@@ -394,10 +490,12 @@ export default function IngredientsPage() {
 
                   <button
                     type="submit"
-                    className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-peach/20 bg-peach/8 px-4 py-3 text-sm font-medium text-peach-light transition-colors hover:border-peach/35 hover:bg-peach/12"
+                    disabled={isSaving}
+                    className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-peach/20 bg-peach/8 px-4 py-3 text-sm font-medium text-peach-light transition-colors hover:border-peach/35 hover:bg-peach/12 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <Plus size={16} />
-                    Ajouter l’ingrédient
+
+                    {isSaving ? "Enregistrement..." : "Ajouter l’ingrédient"}
                   </button>
                 </div>
               </form>
