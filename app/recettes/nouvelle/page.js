@@ -57,11 +57,6 @@ export default function NewRecipePage() {
           data.ingredients?.length > 0 ? data.ingredients : defaultIngredients;
 
         setAvailableIngredients(loadedIngredients);
-
-        /*
-         * Copie locale temporaire.
-         */
-        localStorage.setItem("ingredients", JSON.stringify(loadedIngredients));
       } catch (error) {
         console.error("Erreur chargement ingrédients :", error);
 
@@ -213,11 +208,6 @@ export default function NewRecipePage() {
       await saveUserState({
         recipes: updatedRecipes,
       });
-
-      /*
-       * Copie locale temporaire.
-       */
-      localStorage.setItem("recipes", JSON.stringify(updatedRecipes));
 
       showToast("Recette créée");
 

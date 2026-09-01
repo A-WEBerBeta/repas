@@ -69,13 +69,6 @@ export default function RecipePage() {
         setIngredients(ingredientList);
 
         setSelectedServings(Number(foundRecipe.baseServings) || 1);
-
-        /*
-         * Copie locale temporaire.
-         */
-        localStorage.setItem("recipes", JSON.stringify(recipes));
-
-        localStorage.setItem("ingredients", JSON.stringify(ingredientList));
       } catch (error) {
         console.error("Erreur chargement recette :", error);
 
@@ -128,11 +121,6 @@ export default function RecipePage() {
       await saveUserState({
         recipes: updatedRecipes,
       });
-
-      /*
-       * Copie locale temporaire.
-       */
-      localStorage.setItem("recipes", JSON.stringify(updatedRecipes));
 
       showToast("Recette supprimée");
 

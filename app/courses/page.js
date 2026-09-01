@@ -237,28 +237,6 @@ export default function CoursesPage() {
         setPlanning(data.planning);
 
         setShoppingLists(data.shoppingLists);
-
-        /*
-         * Copie temporaire locale pendant
-         * la migration du reste de l'app.
-         */
-        localStorage.setItem("recipes", JSON.stringify(data.recipes));
-
-        localStorage.setItem(
-          "ingredients",
-          JSON.stringify(
-            data.ingredients?.length > 0
-              ? data.ingredients
-              : defaultIngredients,
-          ),
-        );
-
-        localStorage.setItem("planning", JSON.stringify(data.planning));
-
-        localStorage.setItem(
-          "shoppingLists",
-          JSON.stringify(data.shoppingLists),
-        );
       } catch (error) {
         console.error("Erreur chargement Courses :", error);
 
@@ -271,8 +249,6 @@ export default function CoursesPage() {
 
   async function saveShoppingLists(updated) {
     setShoppingLists(updated);
-
-    localStorage.setItem("shoppingLists", JSON.stringify(updated));
 
     try {
       await saveUserState({

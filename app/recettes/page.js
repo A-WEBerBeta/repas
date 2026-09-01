@@ -40,13 +40,6 @@ export default function RecipesPage() {
         const data = await loadUserState();
 
         setRecipes(data.recipes);
-
-        /*
-         * Copie locale temporaire.
-         * On la garde tant que toute l'app
-         * n'est pas encore migrée.
-         */
-        localStorage.setItem("recipes", JSON.stringify(data.recipes));
       } catch (error) {
         console.error("Erreur chargement recettes :", error);
 
@@ -87,11 +80,6 @@ export default function RecipesPage() {
      */
     setRecipes(updatedRecipes);
 
-    /*
-     * Copie locale temporaire.
-     */
-    localStorage.setItem("recipes", JSON.stringify(updatedRecipes));
-
     try {
       await saveUserState({
         recipes: updatedRecipes,
@@ -109,8 +97,6 @@ export default function RecipesPage() {
        * telle qu'elle était avant.
        */
       setRecipes(recipes);
-
-      localStorage.setItem("recipes", JSON.stringify(recipes));
 
       showToast("La recette n’a pas pu être supprimée", "info");
     } finally {

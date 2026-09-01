@@ -70,11 +70,6 @@ export default function IngredientsPage() {
             ingredients: mergedIngredients,
           });
         }
-
-        /*
-         * Copie locale temporaire.
-         */
-        localStorage.setItem("ingredients", JSON.stringify(mergedIngredients));
       } catch (error) {
         console.error("Erreur chargement ingrédients :", error);
 
@@ -87,11 +82,6 @@ export default function IngredientsPage() {
 
   async function saveIngredients(updatedIngredients) {
     setIngredients(updatedIngredients);
-
-    /*
-     * Copie locale temporaire.
-     */
-    localStorage.setItem("ingredients", JSON.stringify(updatedIngredients));
 
     try {
       await saveUserState({

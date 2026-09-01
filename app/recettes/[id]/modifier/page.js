@@ -91,13 +91,6 @@ export default function EditRecipePage() {
           })),
         );
 
-        /*
-         * Copie locale temporaire.
-         */
-        localStorage.setItem("recipes", JSON.stringify(recipes));
-
-        localStorage.setItem("ingredients", JSON.stringify(ingredientList));
-
         setLoaded(true);
       } catch (error) {
         console.error("Erreur chargement recette :", error);
@@ -271,11 +264,6 @@ export default function EditRecipePage() {
       await saveUserState({
         recipes: updatedRecipes,
       });
-
-      /*
-       * Copie locale temporaire.
-       */
-      localStorage.setItem("recipes", JSON.stringify(updatedRecipes));
 
       showToast("Modifications enregistrées");
 
