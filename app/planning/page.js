@@ -213,17 +213,6 @@ export default function PlanningPage() {
         setRecipes(data.recipes);
         setPlanning(data.planning);
         setShoppingDays(data.shoppingDays);
-
-        /*
-         * Pendant la transition, on garde aussi
-         * le localStorage à jour pour les pages
-         * qui ne sont pas encore passées sur Supabase.
-         */
-        localStorage.setItem("recipes", JSON.stringify(data.recipes));
-
-        localStorage.setItem("planning", JSON.stringify(data.planning));
-
-        localStorage.setItem("shoppingDays", JSON.stringify(data.shoppingDays));
       } catch (error) {
         console.error("Erreur chargement Supabase :", error);
 
@@ -236,12 +225,6 @@ export default function PlanningPage() {
 
   async function savePlanning(updatedPlanning) {
     setPlanning(updatedPlanning);
-
-    /*
-     * On garde encore localStorage pendant
-     * qu'on migre les autres pages.
-     */
-    localStorage.setItem("planning", JSON.stringify(updatedPlanning));
 
     try {
       await saveUserState({
@@ -406,8 +389,6 @@ export default function PlanningPage() {
     }
 
     setShoppingDays(updatedShoppingDays);
-
-    localStorage.setItem("shoppingDays", JSON.stringify(updatedShoppingDays));
 
     saveUserState({
       shoppingDays: updatedShoppingDays,
